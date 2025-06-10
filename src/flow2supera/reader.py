@@ -161,8 +161,7 @@ class InputReader:
             events = flow_manager[events_path]
             events_data = events['data']
             self._event_ids = events_data['id']
-            #ts_start is in ticks and 0.1 microseconds per tick for charge readout
-            self._event_t0s = events_data['unix_ts'] + events_data['ts_start']/1e7 
+            self._event_t0s = events_data['unix_ts'] + events_data['unix_ts_usec']/1e6
             self._event_hit_indices = flow_manager[event_hit_indices_path]
             self._hits              = flow_manager[calib_hits_path]
             self._ext_trigs         = flow_manager[ext_trigs_path]
