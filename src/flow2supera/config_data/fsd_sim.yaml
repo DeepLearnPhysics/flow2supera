@@ -1,0 +1,44 @@
+# ===============
+# fsd_data.yaml
+# ===============
+
+LogLevel:        INFO
+Flow2Supera:
+    PropertyConfig:
+        ParserConfigKeyword:  'fsd'
+        SimConfigKeyword:    'fsd'
+        TileLayout: ''
+        DetectorProperties: ''
+
+    ElectronEnergyThreshold: 5
+    DataType: ['sim', 'cosmic'] #FIXME: should change to 'cosmic'
+    HitsType: 'prompt' #Only prompt or final
+    DBSCANDist: 0.74082 # 1.99 * 0.372
+    DBSCANNjobs: 1 # -1 = all cores, but 1 may be faster
+    DBSCANParticleCluster: True
+    DBSCANUnassociatedEDeps: True
+
+BBoxAlgorithm: BBoxInteraction
+BBoxConfig:
+    LogLevel:   WARNING
+    Seed:       -1
+
+    BBoxSize:   [142.848, 357.12, 142.848]
+    BBoxTop:    [70.84798665, 189.7200061, 81.69211621]
+    BBoxBottom: [-72.00001335, -167.3999939, -61.15588379]
+    VoxelSize:  [0.372, 0.372, 0.372]
+
+LabelAlgorithm: LArTPCMLReco3D
+LabelConfig:
+    #
+    # SuperaAtomic::Driver configuration
+    #
+    LogLevel: WARNING
+    DeltaSize:    10
+    ComptonSize:  10
+    LEScatterSize: 5
+    TouchDistance: 1
+    StoreLEScatter:   True
+    SemanticPriority: [1,0,2,3,4]
+    EnergyDepositThreshold: 0.0
+    RewriteInteractionID:  False
