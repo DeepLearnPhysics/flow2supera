@@ -286,7 +286,8 @@ def run_supera(out_file='larcv.root',
             if input_data.trajectories is None:
                 print(f'[run_supera] WARNING skipping this entry {entry} as it appears to be "empty" (no truth association found, non-unique event id, etc.)')
                 continue
-            writer.set_id(0, 0, int(input_data.true_event_id)) #Fill MCTruth/edepsim ID for simulation
+            writer.set_id(0, 0, int(input_data.event_id))
+            #writer.set_id(0, 0, int(input_data.true_event_id)) #Fill MCTruth/edepsim ID for simulation
             driver.Meta().edep2voxelset(driver._edeps_all).fill_std_vectors(id_v, value_v)
             driver.GenerateLabel(EventInput) 
             time_generate = time.time() - t2

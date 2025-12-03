@@ -141,8 +141,8 @@ class InputReader:
         trajectories_path      = 'mc_truth/trajectories/data'
         
         light_events_path = 'light/events/data'
-        flash_path = 'light/flash/data'
-        flash_light_ref_path = 'light/events/ref/light/flash/ref_region'
+        flash_path = 'light/flash_sipm/data'
+        flash_light_ref_path = 'light/events/ref/light/flash_sipm/ref_region'
         charge_light_ref_path = 'charge/events/ref/light/events/ref_region'
 
         ext_trigs_path = 'charge/ext_trigs/data'
@@ -150,7 +150,7 @@ class InputReader:
         
         self.charge_event_path = 'charge/events'
         self.light_event_path = 'light/events'
-        self.light_flash_path = 'light/flash'
+        self.light_flash_path = 'light/flash_sipm'
         
         # TODO Currently only reading one input file at a time. Is it 
         # necessary to read multiple? If so, how to handle non-unique
@@ -176,7 +176,7 @@ class InputReader:
                 self._event_hit_indices = flow_manager[event_hit_indices_path][:entries_to_read]
             if self._include_disabled_channels and 'is_disabled' not in self._hits.dtype.names:
                 raise ValueError ('No disabled channels field in hits dataset, please change config')
-            self._has_light = 'light' in fin.keys() and 'flash' in fin['light'].keys()
+            self._has_light = 'light' in fin.keys() and 'flash_sipm' in fin['light'].keys()
             if self._has_light:
                 self._light_event_indices = flow_manager[charge_light_ref_path]
                 self._light_events = flow_manager[light_events_path]
@@ -251,7 +251,7 @@ class InputReader:
         flash_result.flash_id = int(flash['id'])
         flash_result.time = flash['hit_time_range'][0]*1e-9 + t0
         flash_result.timeWidth = (flash['hit_time_range'][1] - flash['hit_time_range'][0])*1e-9
-        flash_result.PEPerOpDet = np.array(flash['deconv_sum']).flatten()#*0.022857 #adc charge to pe conversion
+        flash_result.PEPerOpDet = np.array(flash['sum_pe_ch']).flatten()#*0.022857 #adc charge to pe conversion
         flash_result.volume_id = int(flash['tpc'])
 
         return flash_result
