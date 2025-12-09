@@ -269,7 +269,7 @@ class SuperaDriver:
             while not ancestor.id == ancestor.parent_id:
                 ancestor = supera_event[ancestor.parent_id]
 
-            supera_event[index].ancestor_id = ancestor.id
+            supera_event[index].ancestor_id = ancestor.track_id
         # A-4 finished
 
 
