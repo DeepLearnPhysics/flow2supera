@@ -46,6 +46,6 @@ LabelConfig:
     LEScatterSize: 5
     TouchDistance: 1
     StoreLEScatter:   True
-    SemanticPriority: [1,0,2,3,4]
+    SemanticPriority: [1,2,0,3,4]
     EnergyDepositThreshold: 0.0
     RewriteInteractionID:  False
