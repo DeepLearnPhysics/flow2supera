@@ -81,7 +81,7 @@ def larcv_particle(p):
         larp.children_id(cid)
 
     # ancestor info setter
-    larp.ancestor_track_id (p.part.ancestor_id)
+    larp.ancestor_track_id (p.part.ancestor_trackid)
     larp.ancestor_pdg_code (p.part.ancestor_pdg)
     larp.ancestor_creation_process(p.part.ancestor_process)
                                    
