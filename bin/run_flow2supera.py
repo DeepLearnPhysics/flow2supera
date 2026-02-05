@@ -24,7 +24,7 @@ parser.add_argument('-s', '--skip',
                     type = int,
                     default = 0,
                     help="number of first events to skip.")
-parser.add_argument('-l', '--log',
+parser.add_argument('-l', '--log_file',
                     type = str,
                     default = '',
                     help="the name of a log file to be created.")
