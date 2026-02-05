@@ -2,8 +2,6 @@
 import flow2supera
 import sys,os
 
-from optparse import OptionParser
-
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file',
@@ -17,10 +15,10 @@ parser.add_argument('-c', '--config',
                     type = str,
                     default = '',
                     help = "Configuration keyword or a file path (full or relative including the file name).",
-                    required = True)
+                    )
 parser.add_argument('-n', '--num_events',
                     type = int,
-                    default = -1,
+                    default = None,
                     help="number of events to process.")
 parser.add_argument('-s', '--skip',
                     type = int,
@@ -52,15 +50,10 @@ if not args.input_file:
 output = args.output
 input_files = args.input_file
 
-if args.num_events >= 0:
-    num_events = args.num_events
-else:
-    num_events = None
-
 flow2supera.utils.run_supera(out_file=args.output,
                              in_file=args.input,
                              config_key=args.config,
-                             num_events=num_events,
+                             num_events=args.num_events,
                              num_skip=int(args.skip),
                              save_log=args.log_file,
                              )
