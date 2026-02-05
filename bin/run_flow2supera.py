@@ -51,7 +51,7 @@ output = args.output
 input_files = args.input_file
 
 flow2supera.utils.run_supera(out_file=args.output,
-                             in_file=args.input,
+                             in_file=args.input_file,
                              config_key=args.config,
                              num_events=args.num_events,
                              num_skip=int(args.skip),
