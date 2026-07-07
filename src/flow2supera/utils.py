@@ -134,6 +134,29 @@ def larcv_flash(f):
 
     return larf
 
+def larcv_hits_tpc(writer, supera_meta, meta, hits, id_v, value_v):
+    '''
+    Store the TPC ID of the hits as a sparse3d tensor, i.e. (x,y,z,tpc_id)
+    per voxel. The TPC ID is io_group - 1, matching the TPC numbering used
+    for the light flashes (0-7 for 2x2).
+    '''
+    tensor_tpc = writer.get_data("sparse3d", "hits_tpc")
+
+    voxel_tpc = {}
+    for hit in hits:
+        vox_id = supera_meta.id(hit['x'], hit['y'], hit['z'])
+        if vox_id == supera.kINVALID_VOXELID:
+            continue
+        voxel_tpc[int(vox_id)] = float(hit['io_group'] - 1)
+
+    id_v.clear()
+    value_v.clear()
+    for vox_id in sorted(voxel_tpc):
+        id_v.push_back(vox_id)
+        value_v.push_back(voxel_tpc[vox_id])
+    larcv.as_event_sparse3d(tensor_tpc, meta, id_v, value_v)
+
+
 def get_flow2supera(config_key):
 
     driver = flow2supera.driver.SuperaDriver()
@@ -333,6 +356,9 @@ def run_supera(out_file='larcv.root',
                     continue
                 larn = larcv_neutrino(ixn)
                 interaction.append(larn)
+
+        #Fill the hit TPC IDs
+        larcv_hits_tpc(writer, driver.Meta(), meta, input_data.hits, id_v, value_v)
 
         #Fill flashes
         flash = writer.get_data("opflash", "light")
