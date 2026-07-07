@@ -17,7 +17,6 @@ class InputEvent:
     trig_type = INT_MAX
     true_event_id = -1
     segments = None
-    hit_indices = None
     hits = None
     ext_trigs = None
     backtracked_hits = None
@@ -68,8 +67,6 @@ class InputReader:
 
         self._event_ids = None
         self._event_t0s = None
-        self._flashes = None
-        self._event_hit_indices = None
         self._hits = None
         self._backtracked_hits = None
         self._segments = None
@@ -125,34 +122,23 @@ class InputReader:
 
         print('Reading input file...')
 
-        # H5Flow's H5FlowDataManager class associated datasets through references
-        # These paths help us get the correct associations
+        # H5Flow's H5FlowDataManager class associates datasets through references.
+        # Dataset-level paths (without the /data suffix) are used to dereference
+        # those associations directly with the flow manager.
+        self.charge_event_path = 'charge/events'
+        self.calib_hits_path   = f'charge/calib_{self._hits_type}_hits'
+        self.ext_trigs_path    = 'charge/ext_trigs'
+        self.light_event_path  = 'light/events'
+        self.light_flash_path  = 'light/flash'
+
         events_path            = 'charge/events/'
-        events_data_path       = 'charge/events/data/'
-        event_hit_indices_path = f'charge/events/ref/charge/calib_{self._hits_type}_hits/ref_region/'
-
-        
-        packets_path           = 'charge/packets'
-        calib_hits_path = f'charge/calib_{self._hits_type}_hits/data'
-
+        calib_hits_path        = f'charge/calib_{self._hits_type}_hits/data'
         backtracked_hits_path  = f'mc_truth/calib_{self._hits_type}_hit_backtrack/data'
         interactions_path      = 'mc_truth/interactions/data'
         segments_path          = 'mc_truth/segments/data'
         trajectories_path      = 'mc_truth/trajectories/data'
-        
-        light_events_path = 'light/events/data'
-        flash_path = 'light/flash/data'
-        flash_light_ref_path = 'light/events/ref/light/flash/ref_region'
-        charge_light_ref_path = 'charge/events/ref/light/events/ref_region'
 
-        ext_trigs_path = 'charge/ext_trigs/data'
-        ext_trigs_ref_path = 'charge/events/ref/charge/ext_trigs/ref_region'
-        
-        self.charge_event_path = 'charge/events'
-        self.light_event_path = 'light/events'
-        self.light_flash_path = 'light/flash'
-        
-        # TODO Currently only reading one input file at a time. Is it 
+        # TODO Currently only reading one input file at a time. Is it
         # necessary to read multiple? If so, how to handle non-unique
         # event IDs?
         flow_manager = h5flow.data.H5FlowDataManager(input_file, 'r')
@@ -162,27 +148,17 @@ class InputReader:
             events_data = events['data']
             self._event_ids = events_data['id']
             self._event_t0s = events_data['unix_ts'] + events_data['unix_ts_usec']/1e6
-            self._event_hit_indices = flow_manager[event_hit_indices_path]
-            self._hits              = flow_manager[calib_hits_path]
-            self._ext_trigs         = flow_manager[ext_trigs_path]
-            self._ext_trigs_indices = flow_manager[ext_trigs_ref_path]
-            self._n_ext_trigs       = events_data['n_ext_trigs']
+            self._hits      = flow_manager[calib_hits_path]
+            self._has_ext_trigs = 'ext_trigs' in fin['charge'].keys()
+            self._n_ext_trigs   = events_data['n_ext_trigs']
             if self._hits is None:
                 raise ValueError(f'No data in {calib_hits_path}')
-            if self._event_hit_indices is None:
-                raise ValueError(f'No data in {event_hit_indices_path}')
             if entries_to_read is not None:
                 self._event_ids = events_data['id'][:entries_to_read]
-                self._event_hit_indices = flow_manager[event_hit_indices_path][:entries_to_read]
             if self._include_disabled_channels and 'is_disabled' not in self._hits.dtype.names:
                 raise ValueError ('No disabled channels field in hits dataset, please change config')
             self._has_light = 'light' in fin.keys() and 'flash' in fin['light'].keys()
-            if self._has_light:
-                self._light_event_indices = flow_manager[charge_light_ref_path]
-                self._light_events = flow_manager[light_events_path]
-                self._flash_indices =  flow_manager[flash_light_ref_path]
-                self._flashes = flow_manager[flash_path]
-            
+
             if self._is_sim:
                 self._backtracked_hits  = flow_manager[backtracked_hits_path]
                 if self._backtracked_hits is None:
@@ -190,19 +166,48 @@ class InputReader:
                 self._segments     = np.array(flow_manager[segments_path])
                 self._trajectories = np.array(flow_manager[trajectories_path])
                 self._interactions = np.array(flow_manager[interactions_path])
-                
+
                 # Make explicit reference to segment ids and entry index array
                 self._segment_ids = self._segments['segment_id']
                 self._segment_idx = np.arange(len(self._segments))
                 self._segment_event_ids = self._segments['event_id']
 
-                # Quality check: event IDs from segments are consistent with the info stored at the event level
-                if not len(self._event_hit_indices) == len(self._event_ids):
-                    print('The number of entries do not match between event_data and backtrack hit range array')
-                    print(events_path,'...',len(self._event_ids))
-                    print(events_hit_indices_path,'...',len(self._event_hit_indices))
-                    raise ValueError('Array length mismatch in the input file')
                 self._valid_segment_event_ids = self.FileQualityCheck(entries_to_read)
+
+    def DereferenceEvent(self, entry, dataset_path):
+        '''
+        Fetch the data associated with a charge event (row index = entry) by
+        dereferencing the charge/events -> dataset_path references with the
+        flow manager. Returns a plain structured array with masked (invalid)
+        elements removed.
+        '''
+        data = self.manager[self.charge_event_path, dataset_path, entry]
+        data = data.flatten()
+        valid = ~np.ma.getmaskarray(data[data.dtype.names[0]])
+        return data.data[valid]
+
+    def GetEventHitIndices(self, entry):
+        '''
+        Row indices (sorted) of the calibrated hits associated with a charge
+        event, obtained by dereferencing the flow manager references. The same
+        indices are valid for the backtracking dataset, which is row-aligned
+        with the calibrated hits.
+        '''
+        ref, ref_dir = self.manager.get_ref(self.charge_event_path, self.calib_hits_path)
+        region = self.manager.get_ref_region(self.charge_event_path, self.calib_hits_path)
+        idx = h5flow.data.dereference(entry, ref, region=region, ref_direction=ref_dir, indices_only=True)
+        idx = idx.flatten()
+        idx = idx.data[~np.ma.getmaskarray(idx)]
+        return np.sort(idx)
+
+    @staticmethod
+    def ReadDatasetRows(dataset, indices):
+        '''Read the given (sorted) rows of a h5py dataset, using a contiguous slice when possible'''
+        if len(indices) == 0:
+            return np.empty(0, dtype=dataset.dtype)
+        if indices[-1] - indices[0] + 1 == len(indices):
+            return dataset[indices[0]:indices[-1]+1]
+        return dataset[indices]
 
     
     def GetNeutrinoIxn(self, ixn, ixn_idx):
@@ -287,22 +292,19 @@ class InputReader:
 
     def FileQualityCheck(self,entries_to_read=None):
 
-        num_entries = len(self._event_hit_indices)
+        num_entries = len(self._event_ids)
         if entries_to_read is not None:
             num_entries = min(num_entries,int(entries_to_read))
         eid_ctr = np.zeros(num_entries,dtype=int)
         eid_val = np.full(num_entries,fill_value=-1,dtype=int)
         bad_event_ids = []
         empty_entries = []
-        
+
         print(f'[InputReader] Checking the event IDs in this file... (reading {num_entries})')
-        for entry,(hidx_min,hidx_max) in tqdm.tqdm(enumerate(self._event_hit_indices),desc='Scanning event IDs'):
+        for entry in tqdm.tqdm(range(num_entries),desc='Scanning event IDs'):
 
-            if entry >= num_entries:
-                break
-
-            bhits = self._backtracked_hits[hidx_min:hidx_max]
-            if len(bhits) == 0: 
+            bhits = self.ReadDatasetRows(self._backtracked_hits, self.GetEventHitIndices(entry))
+            if len(bhits) == 0:
                 empty_entries.append(entry)
                 continue
             ids_this=self.GetEventIDFromSegments(bhits)
@@ -329,7 +331,7 @@ class InputReader:
         if len(bad_event_ids):
             bad_event_ids=np.concatenate(bad_event_ids)
         bad_event_ids = np.unique(bad_event_ids)
-        mask=np.zeros(len(self._event_hit_indices),dtype=bool)
+        mask=np.zeros(num_entries,dtype=bool)
         for bad_id in bad_event_ids:
             mask = mask | (eid_val == bad_id)
         if mask.sum():
@@ -360,16 +362,14 @@ class InputReader:
 
         result.event_id = self._event_ids[entry]
 
-        result.t0 = self._event_t0s[entry] 
+        result.t0 = self._event_t0s[entry]
 
-        result.hit_indices = self._event_hit_indices[entry]
-        hidx_min, hidx_max = self._event_hit_indices[entry]
-        all_hits = self._hits[hidx_min:hidx_max]
+        hit_indices = self.GetEventHitIndices(entry)
+        all_hits = self.ReadDatasetRows(self._hits, hit_indices)
 
         if self._include_disabled_channels:
             disabled_mask = ~all_hits['is_disabled']
-            enabled_indices = np.where(disabled_mask)[0]
-            result.hits = all_hits[disabled_mask] #self._hits[hidx_min:hidx_max]
+            result.hits = all_hits[disabled_mask]
         else:
             result.hits = all_hits
 
@@ -377,11 +377,11 @@ class InputReader:
         # if not self._is_sim and len(result.hits) < 50: #remove noisy events
         #     print(f'[InputReader] No hits, skipping this entry ({entry})...')
         #     return result
-            
-        if self._ext_trigs:
-            trig_start, trig_stop= self._ext_trigs_indices[entry]
-            if trig_stop-trig_start: #if there is asociated external trigger
-                ttypes = self._ext_trigs[trig_start:trig_stop]['iogroup']
+
+        if self._has_ext_trigs:
+            ext_trigs = self.DereferenceEvent(entry, self.ext_trigs_path)
+            if len(ext_trigs): #if there is asociated external trigger
+                ttypes = ext_trigs['iogroup']
                 if self._beam_trigger in ttypes: #beam takes precedence in data
                     result.trig_type = self._beam_trigger
                 else: #otherwise just take the first trigger if more than 1
@@ -407,9 +407,11 @@ class InputReader:
             print('[InputReader] SuperaInput filled (not sim)',time.time()-t0,'[s]')
             return result
 
-        all_backtracked_hits = self._backtracked_hits[hidx_min:hidx_max]
+        # The backtracking dataset is row-aligned with the calibrated hits,
+        # so the same row indices apply
+        all_backtracked_hits = self.ReadDatasetRows(self._backtracked_hits, hit_indices)
         if self._include_disabled_channels:
-            result.backtracked_hits = all_backtracked_hits[enabled_indices]
+            result.backtracked_hits = all_backtracked_hits[disabled_mask]
         else:
             result.backtracked_hits = all_backtracked_hits
         
@@ -447,7 +449,6 @@ class InputReader:
         print('Event ID {}'.format(input_event.event_id))
         print('Event t0 {}'.format(input_event.t0))
         print('External trigger type {}'.format(input_event.trig_type))
-        print('Event hit indices (start, stop):', input_event.hit_indices)
         print('Hits shape:', input_event.hits.shape)
 
         if self._has_light:
