@@ -342,6 +342,11 @@ def run_supera(out_file='larcv.root',
             result.FillClustersdEdX(id_vv, value_vv)
             larcv.as_event_cluster3d(cluster_dedx, meta, id_vv, value_vv)
 
+            #Fill the G4 segment energy deposits in a separate tree
+            tensor_g4 = writer.get_data("sparse3d", "g4_segments")
+            driver.Meta().edep2voxelset(driver._edeps_g4).fill_std_vectors(id_v, value_v)
+            larcv.as_event_sparse3d(tensor_g4, meta, id_v, value_v)
+
             particle = writer.get_data("particle", "pcluster")
             for p in result._particles:
                 if not p.valid:
