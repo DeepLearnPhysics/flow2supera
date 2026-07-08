@@ -2,59 +2,58 @@
 import flow2supera
 import sys,os
 
-from optparse import OptionParser
-...
-parser = OptionParser(usage='Provide option flags followed by a list of input files.')
-parser.add_option("-o", "--output", dest="output_filename", metavar="FILE",
-                  help="Output (LArCV) filename")
-parser.add_option("-c", "--config", dest="config", metavar='FILE/KEYWORD', default='',
-                  help="Configuration keyword or a file path (full or relative including the file name)")
-parser.add_option("-n", "--num_events", dest="num_events", metavar="INT", default=None,
-                  help="number of events to process")
-parser.add_option("-s", "--skip", dest="skip", metavar="INT", default=0,
-                  help="number of first events to skip")
-#parser.add_option("-b", action="store_true", dest="ignore_bad_association", default=False)
-parser.add_option("-l", "--log", dest="log_file", metavar="FILE", default='',
-                  help="the name of a log file to be created. ")
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('input_file',
+                    type = str,
+                    help = "input file from which to read and simulate an event.",
+                    )
+parser.add_argument('-o', '--output',
+                    type = str,
+                    help = "Output (LArCV) filename.")
+parser.add_argument('-c', '--config',
+                    type = str,
+                    default = '',
+                    help = "Configuration keyword or a file path (full or relative including the file name).",
+                    )
+parser.add_argument('-n', '--num_events',
+                    type = int,
+                    default = None,
+                    help="number of events to process.")
+parser.add_argument('-s', '--skip',
+                    type = int,
+                    default = 0,
+                    help="number of first events to skip.")
+parser.add_argument('-l', '--log_file',
+                    type = str,
+                    default = '',
+                    help="the name of a log file to be created.")
 
-(data, args) = parser.parse_args()
+args = parser.parse_args()
 
-if os.path.isfile(data.output_filename):
-    print('Ouput file already exists:',data.output_filename)
+if os.path.isfile(args.output):
+    print('Ouput file already exists:', args.output)
     print('Exiting')
     sys.exit(1)
 
-if not data.config in flow2supera.config.list_config() and not os.path.isfile(data.config):
-    print('Invalid configuration given:',data.config)
+if not args.config in flow2supera.config.list_config() and not os.path.isfile(args.config):
+    print('Invalid configuration given:',args.config)
     print('The argument is not valid as a file path nor matched with any of')
     print('predefined config keys:',flow2supera.config.list_config())
     print('Exiting')
     sys.exit(2)
 
-if len(args) < 1:
+if not args.input_file:
     print('No input files given! Exiting')
     sys.exit(3)
 
-output = sys.argv[1]
-input_files = sys.argv[2:]
+output = args.output
+input_files = args.input_file
 
-if os.path.isfile(sys.argv[1]):
-    print('Output file already exists:',output)
-    sys.exit(2)
-
-if not data.config:
-    print('Configuration file/keyword is required.')
-    sys.exit(3)
-
-if not flow2supera.config.get_config(data.config):
-    print('Invalid configuration option argument:',data.config)
-    sys.exit(3)
-
-flow2supera.utils.run_supera(out_file=data.output_filename,
-    in_file=args[0],
-    config_key=data.config,
-    num_events=data.num_events if data.num_events is None else int(data.num_events),
-    num_skip=int(data.skip),
-    #ignore_bad_association=bool(data.ignore_bad_association),
-    save_log=data.log_file,
-    )
+flow2supera.utils.run_supera(out_file=args.output,
+                             in_file=args.input_file,
+                             config_key=args.config,
+                             num_events=args.num_events,
+                             num_skip=int(args.skip),
+                             save_log=args.log_file,
+                             )
