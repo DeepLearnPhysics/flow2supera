@@ -66,6 +66,7 @@ class SuperaDriver:
         self._edeps_unassociated = std.vector('supera::EDep')()
         self._edeps_all = std.vector('supera::EDep')()
         self._edeps_g4 = std.vector('supera::EDep')()
+        self._edeps_g4_v = std.vector('std::vector<supera::EDep>')()
         self._segment_size_max = 0.03 # cm, max distance between sampled points along a G4 segment
         self._ass_distance_limit=0.4434*6
         self._ass_charge_limit=0.00
@@ -193,6 +194,7 @@ class SuperaDriver:
         self._edeps_unassociated.clear()
         self._edeps_all.clear();
         self._edeps_g4.clear()
+        self._edeps_g4_v.clear()
         
         if not is_sim:
             hits = data.hits
@@ -218,11 +220,6 @@ class SuperaDriver:
         segment_ids = data.segments['segment_id']  # Load the segment IDs into a NumPy array
         self._segid2idx.reset(segment_ids)
 
-        # Fill the G4 segment energy deposits (kept separately from the reco hits)
-        for seg in data.segments:
-            for edep in self.SegmentToEDeps(seg):
-                self._edeps_g4.push_back(edep)
-
         #
         # Stage A ... Construct supera::ParticleInput
         # 1. create a unique particle ID <=> particle index dictionary
@@ -238,6 +235,19 @@ class SuperaDriver:
             #trajectories_dict[key] = int(traj['file_traj_id'])
             trajectories_dict[key] = index
         # A-1 finished
+
+        # Fill the G4 segment energy deposits (kept separately from the reco
+        # hits), grouped by trajectory with the same key used to associate hits
+        self._edeps_g4_v.resize(len(data.trajectories))
+        for seg in data.segments:
+            key = (int(seg['traj_id']), int(seg['event_id']), int(seg['vertex_id']))
+            if key not in trajectories_dict:
+                print('[SuperaDriver] WARNING: no trajectory found for a G4 segment with (traj_id, event_id, vertex_id)', key)
+                continue
+            traj_idx = trajectories_dict[key]
+            for edep in self.SegmentToEDeps(seg):
+                self._edeps_g4.push_back(edep)
+                self._edeps_g4_v[traj_idx].push_back(edep)
 
         # Step A-2
         for index, traj in enumerate(data.trajectories):

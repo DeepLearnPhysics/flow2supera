@@ -157,6 +157,59 @@ def larcv_hits_tpc(writer, supera_meta, meta, hits, id_v, value_v):
     larcv.as_event_sparse3d(tensor_tpc, meta, id_v, value_v)
 
 
+def larcv_g4_clusters(driver, result, trajectories, supera_event, id_vv, value_vv, id_v, value_v):
+    '''
+    Group the G4 segment edeps by the label output particles so that the
+    cluster indices match those of cluster3d_pcluster, with the trailing
+    cluster holding edeps not attributed to any stored particle (mirroring
+    the unassociated cluster convention). Input trajectories are matched to
+    output particles by (traj_id, vertex_id) = (track_id, interaction_id);
+    trajectories merged away by the label maker are attributed to the
+    closest ancestor that is stored in the output.
+    '''
+    n_out = result._particles.size()
+    out_map = {}
+    for p in result._particles:
+        if not p.valid:
+            continue
+        key = (int(p.part.trackid), int(p.part.interaction_id))
+        if key in out_map:
+            print('[larcv_g4_clusters] WARNING: duplicate output particle key (track_id, interaction_id)', key)
+        out_map[key] = int(p.part.id)
+
+    supera_meta = driver.Meta()
+    voxels = [dict() for _ in range(n_out + 1)]
+    for i in range(len(trajectories)):
+        if driver._edeps_g4_v[i].empty():
+            continue
+        # find the output particle: this trajectory or its closest stored ancestor
+        idx = i
+        out_idx = n_out  # trailing (unassociated) cluster if no stored ancestor
+        while True:
+            key = (int(trajectories[idx]['traj_id']), int(trajectories[idx]['vertex_id']))
+            if key in out_map:
+                out_idx = out_map[key]
+                break
+            parent = int(supera_event[idx].parent_id)
+            if parent == idx:
+                break
+            idx = parent
+        target = voxels[out_idx]
+        for vox in supera_meta.edep2voxelset(driver._edeps_g4_v[i]).as_vector():
+            target[vox.id()] = target.get(vox.id(), 0.) + vox.value()
+
+    id_vv.clear()
+    value_vv.clear()
+    for vox_dict in voxels:
+        id_v.clear()
+        value_v.clear()
+        for vox_id in sorted(vox_dict):
+            id_v.push_back(vox_id)
+            value_v.push_back(vox_dict[vox_id])
+        id_vv.push_back(id_v)
+        value_vv.push_back(value_v)
+
+
 def get_flow2supera(config_key):
 
     driver = flow2supera.driver.SuperaDriver()
@@ -346,6 +399,11 @@ def run_supera(out_file='larcv.root',
             tensor_g4 = writer.get_data("sparse3d", "g4_segments")
             driver.Meta().edep2voxelset(driver._edeps_g4).fill_std_vectors(id_v, value_v)
             larcv.as_event_sparse3d(tensor_g4, meta, id_v, value_v)
+
+            #Fill the G4 segment edeps grouped by the same particles as cluster3d_pcluster
+            cluster_g4 = writer.get_data("cluster3d", "g4_segments")
+            larcv_g4_clusters(driver, result, input_data.trajectories, EventInput, id_vv, value_vv, id_v, value_v)
+            larcv.as_event_cluster3d(cluster_g4, meta, id_vv, value_vv)
 
             particle = writer.get_data("particle", "pcluster")
             for p in result._particles:
