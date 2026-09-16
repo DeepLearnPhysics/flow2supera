@@ -103,7 +103,11 @@ def larcv_neutrino(n):
     larn.current_type        (n.current_type)
     larn.interaction_mode    (n.interaction_mode)
     larn.interaction_type    (n.interaction_type)
-    larn.target              (n.target)   
+    larn.target              (n.target)
+    if n.nucleon is not None:
+        larn.nucleon         (n.nucleon)
+    if n.quark is not None:
+        larn.quark           (n.quark)
     larn.bjorken_x              (n.bjorken_x)
     larn.inelasticity           (n.inelasticity)
     larn.momentum_transfer      (n.momentum_transfer)
@@ -377,7 +381,6 @@ def run_supera(out_file='larcv.root',
     
     print("\n----- [run_supera] finished -----\n")
     print("[run_supera] Total processing time in s: ", end_time-start_time,'\n')
-
 
 
 
