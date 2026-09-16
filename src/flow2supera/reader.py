@@ -41,6 +41,8 @@ class Neutrino:
     idx = INT_MAX
     interaction_id = INT_MAX
     target = INT_MAX
+    nucleon = None
+    quark = None
     x = FLOAT_MAX
     y = FLOAT_MAX
     z = FLOAT_MAX
@@ -214,7 +216,13 @@ class InputReader:
         
         interaction.idx = int(ixn_idx)
         interaction.interaction_id = int(ixn['vertex_id']) 
-        interaction.target = int(ixn['target'])
+        field_names = ixn.dtype.names or ()
+        target_field = 'target_pdg' if 'target_pdg' in field_names else 'target'
+        interaction.target = int(ixn[target_field])
+        if 'hit_nucleon_pdg' in field_names:
+            interaction.nucleon = int(ixn['hit_nucleon_pdg'])
+        if 'hit_quark_pdg' in field_names:
+            interaction.quark = int(ixn['hit_quark_pdg'])
         try:
             interaction.x = ixn['vertex'][0]
             interaction.y = ixn['vertex'][1]
@@ -460,5 +468,4 @@ class InputReader:
             print('Segments in this event:', len(input_event.segments))
             print('Trajectories in this event:', len(input_event.trajectories))
             print('Interactions in this event:', len(input_event.interactions))
-
 
