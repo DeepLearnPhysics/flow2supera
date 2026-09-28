@@ -65,6 +65,9 @@ class SuperaDriver:
         #self._trajectory_id_to_index = std.vector('supera::Index_t')()
         self._edeps_unassociated = std.vector('supera::EDep')()
         self._edeps_all = std.vector('supera::EDep')()
+        self._edeps_g4 = std.vector('supera::EDep')()
+        self._edeps_g4_v = std.vector('std::vector<supera::EDep>')()
+        self._segment_size_max = 0.03 # cm, max distance between sampled points along a G4 segment
         self._ass_distance_limit=0.4434*6
         self._ass_charge_limit=0.00
         self._ass_fraction_limit=0.1
@@ -147,6 +150,7 @@ class SuperaDriver:
                 raise ValueError('Failed to configure flow2supera!')
 
             self._electron_energy_threshold = f2s_cfg.get('ElectronEnergyThreshold',self._electron_energy_threshold)
+            self._segment_size_max = f2s_cfg.get('MaxSegmentSize',self._segment_size_max)
             self._ass_distance_limit = f2s_cfg.get('AssDistanceLimit',self._ass_distance_limit)
             self._ass_charge_limit = f2s_cfg.get('AssChargeLimit',self._ass_charge_limit)
             self._ass_fraction_limit = f2s_cfg.get('AssFractionLimit',self._ass_fraction_limit)
@@ -187,8 +191,10 @@ class SuperaDriver:
                 self._log[key].append(0)
 
         supera_event = supera.EventInput()
-        self._edeps_unassociated.clear() 
+        self._edeps_unassociated.clear()
         self._edeps_all.clear();
+        self._edeps_g4.clear()
+        self._edeps_g4_v.clear()
         
         if not is_sim:
             hits = data.hits
@@ -229,6 +235,19 @@ class SuperaDriver:
             #trajectories_dict[key] = int(traj['file_traj_id'])
             trajectories_dict[key] = index
         # A-1 finished
+
+        # Fill the G4 segment energy deposits (kept separately from the reco
+        # hits), grouped by trajectory with the same key used to associate hits
+        self._edeps_g4_v.resize(len(data.trajectories))
+        for seg in data.segments:
+            key = (int(seg['traj_id']), int(seg['event_id']), int(seg['vertex_id']))
+            if key not in trajectories_dict:
+                print('[SuperaDriver] WARNING: no trajectory found for a G4 segment with (traj_id, event_id, vertex_id)', key)
+                continue
+            traj_idx = trajectories_dict[key]
+            for edep in self.SegmentToEDeps(seg):
+                self._edeps_g4.push_back(edep)
+                self._edeps_g4_v[traj_idx].push_back(edep)
 
         # Step A-2
         for index, traj in enumerate(data.trajectories):
@@ -533,6 +552,36 @@ class SuperaDriver:
             print("[SuperaDriver] Finising ReadEvent %s seconds" % (time.time() - read_event_start_time))
 
         return supera_event
+
+
+    def SegmentToEDeps(self, seg):
+        '''
+        Convert a G4 (larnd-sim) segment to a list of supera::EDep sampled
+        along the segment line, following edep2supera's MakeEDeps logic:
+        points are spaced by at most _segment_size_max and the segment
+        energy is split evenly among them.
+        '''
+        start = np.array([seg['x_start'], seg['y_start'], seg['z_start']], dtype=float)
+        end   = np.array([seg['x_end'],   seg['y_end'],   seg['z_end']],   dtype=float)
+
+        dist = np.linalg.norm(end - start)
+        num_points = int(dist / self._segment_size_max) + 1
+        point_size = dist / num_points
+        point_energy = float(seg['dE']) / num_points
+        point_dedx = point_energy / point_size if point_size > 0. else float(seg['dEdx'])
+        direction = (end - start) / dist if dist > 0. else np.zeros(3)
+
+        edeps = []
+        for i in range(num_points):
+            pt = start + direction * (point_size * (i + 0.5))
+            edep = supera.EDep()
+            edep.x, edep.y, edep.z = pt
+            edep.t = float(seg['t0_start'])
+            edep.e = point_energy
+            edep.dedx = point_dedx
+            edeps.append(edep)
+
+        return edeps
 
 
     def TrajectoryToParticle(self, trajectory):
