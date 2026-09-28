@@ -11,8 +11,8 @@ Flow2Supera:
         DetectorProperties: ''
 
     ElectronEnergyThreshold: 5
-    DataType: ['sim', 'cosmic'] #FIXME: should change to 'cosmic'
-    HitsType: 'prompt' #Only prompt or final
+    DataType: ['sim', 'cosmic'] 
+    HitsType: 'prompt' #Only prompt or filtered
     DBSCANDist: 0.74082 # 1.99 * 0.372
     DBSCANNjobs: 1 # -1 = all cores, but 1 may be faster
     DBSCANParticleCluster: True

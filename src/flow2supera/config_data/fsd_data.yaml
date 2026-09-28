@@ -11,7 +11,7 @@ Flow2Supera:
 
     ElectronEnergyThreshold: 5
     DataType: ['data', '']
-    HitsType: 'prompt' #Only prompt or final
+    HitsType: 'prompt' #Only prompt or filtered
     RequireExtTrig: True
 
 BBoxAlgorithm: BBoxInteraction

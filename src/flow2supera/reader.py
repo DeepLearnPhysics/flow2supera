@@ -20,7 +20,7 @@ class InputEvent:
     hits = None
     ext_trigs = None
     backtracked_hits = None
-    calib_final_hits  = None
+    calib_filtered_hits  = None
     trajectories = None
     interactions = []
     t0 = -1
@@ -98,8 +98,8 @@ class InputReader:
                     
                     if 'HitsType' in cfg['Flow2Supera']:
                         self._hits_type=cfg['Flow2Supera'].get('HitsType')
-                        if self._hits_type != 'prompt' and self._hits_type != 'final':
-                            raise ValueError('ERROR! HitsType config parameter can only be prompt or final')
+                        if self._hits_type != 'prompt' and self._hits_type != 'final' and self._hit_type != 'filtered':
+                            raise ValueError('ERROR! HitsType config parameter can only be prompt or filtered or final (obselete)')
                     if 'DisabledChannels' in cfg['Flow2Supera']:
                         self._include_disabled_channels=cfg['Flow2Supera'].get('DisabledChannels', self._include_disabled_channels)
                     if 'BeamTriggerIOgroup' in cfg['Flow2Supera']:

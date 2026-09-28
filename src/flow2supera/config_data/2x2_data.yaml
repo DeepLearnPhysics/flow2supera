@@ -13,7 +13,7 @@ Flow2Supera:
         DetectorProperties: ''
 
     DataType: ['data', '']
-    HitsType: 'final' #Only prompt or final
+    HitsType: 'filtered' #Only prompt or filtered
     BeamTriggerIOgroup: 5
     DisabledChannels: False
 
