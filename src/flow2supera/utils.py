@@ -161,6 +161,60 @@ def larcv_hits_tpc(writer, supera_meta, meta, hits, id_v, value_v):
     larcv.as_event_sparse3d(tensor_tpc, meta, id_v, value_v)
 
 
+def larcv_hits_t0(writer, supera_meta, meta, hits, tensor_key, id_v, value_v):
+    '''
+    Store the charge-light matched t0 [ns] and its confidence per voxel as
+    sparse3d tensors (hits_t0, hits_t0_cl). They are filled on exactly the
+    voxel set of the input tensor `tensor_key` so they can be stacked as extra
+    features. Per voxel, t0 is the energy-weighted mode of the matched hit t0s
+    (unmatched hits, t_0 < 0, are ignored) and the confidence is the
+    energy-weighted mean t_confidence of the hits carrying that t0 (hits with
+    unavailable confidence, t_confidence < 0, are ignored). Voxels without any
+    matched hit (or without any available confidence) get -1.
+    '''
+    tensor_t0   = writer.get_data("sparse3d", "hits_t0")
+    tensor_conf = writer.get_data("sparse3d", "hits_t0_cl")
+
+    # Voxel set of the input tensor (VoxelSet keeps IDs sorted)
+    vox_ids = np.array([v.id() for v in writer.get_data("sparse3d", tensor_key).as_vector()], dtype=np.uint64)
+    t0_v    = np.full(len(vox_ids), -1., dtype=np.float32)
+    conf_v  = np.full(len(vox_ids), -1., dtype=np.float32)
+
+    # Map the matched hits onto the input voxels
+    hits = hits[hits['t_0'] >= 0]
+    if len(vox_ids) and len(hits):
+        hit_vox = np.array([supera_meta.id(h['x'], h['y'], h['z']) for h in hits], dtype=np.uint64)
+        pos = np.minimum(np.searchsorted(vox_ids, hit_vox), len(vox_ids) - 1)
+        ok  = vox_ids[pos] == hit_vox
+        pos, t0 = pos[ok], hits['t_0'][ok].astype(np.float64)
+        conf, w = hits['t_confidence'][ok], np.maximum(hits['E'][ok], 0.) + 1e-9
+        has_conf = conf >= 0
+
+        if len(pos):
+            # Energy summed per (voxel, t0) pair, plus the confidence-weighted
+            # energy over the hits that have a confidence
+            pairs, inv = np.unique(np.stack([pos.astype(np.float64), t0], axis=1), axis=0, return_inverse=True)
+            inv   = inv.ravel()
+            wsum  = np.bincount(inv, weights=w)
+            wcsum = np.bincount(inv, weights=w * has_conf)
+            csum  = np.bincount(inv, weights=w * np.where(has_conf, conf, 0.))
+
+            # Keep the heaviest t0 in each voxel (ties -> smaller t0)
+            order = np.lexsort((pairs[:, 1], -wsum, pairs[:, 0]))
+            best  = order[np.unique(pairs[order, 0], return_index=True)[1]]
+            idx   = pairs[best, 0].astype(np.int64)
+            t0_v[idx]   = pairs[best, 1]
+            conf_v[idx] = np.where(wcsum[best] > 0, csum[best] / np.maximum(wcsum[best], 1e-30), -1.)
+
+    for tensor, values in ((tensor_t0, t0_v), (tensor_conf, conf_v)):
+        id_v.clear()
+        value_v.clear()
+        for vox_id, value in zip(vox_ids, values):
+            id_v.push_back(int(vox_id))
+            value_v.push_back(float(value))
+        larcv.as_event_sparse3d(tensor, meta, id_v, value_v)
+
+
 def larcv_g4_clusters(driver, result, trajectories, supera_event, id_vv, value_vv, id_v, value_v):
     '''
     Group the G4 segment edeps by the label output particles so that the
@@ -426,6 +480,11 @@ def run_supera(out_file='larcv.root',
 
         #Fill the hit TPC IDs
         larcv_hits_tpc(writer, driver.Meta(), meta, input_data.hits, id_v, value_v)
+
+        #Fill the charge-light matched t0 per voxel, only for files that have it
+        if reader._has_t0:
+            larcv_hits_t0(writer, driver.Meta(), meta, input_data.hits,
+                          'pcluster' if reader._is_sim else 'hits', id_v, value_v)
 
         #Fill flashes
         flash = writer.get_data("opflash", "light")

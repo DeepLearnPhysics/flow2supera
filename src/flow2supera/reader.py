@@ -77,6 +77,7 @@ class InputReader:
         self._is_sim = False
         self._is_mpvmpr= False
         self._has_light=False
+        self._has_t0=False
         self._hits_type = 'prompt'
         self._include_disabled_channels = False
         self._beam_trigger = None
@@ -160,6 +161,13 @@ class InputReader:
             if self._include_disabled_channels and 'is_disabled' not in self._hits.dtype.names:
                 raise ValueError ('No disabled channels field in hits dataset, please change config')
             self._has_light = 'light' in fin.keys() and 'flash' in fin['light'].keys()
+            # Charge-light matched t0 is only usable if the fields exist and were
+            # actually filled (old i2 flow files carry the field but leave it at 0)
+            hits_dset = fin[calib_hits_path]
+            self._has_t0 = ({'t_0', 't_confidence'}.issubset(hits_dset.dtype.names)
+                            and bool(np.any(hits_dset.fields('t_0')[:] != 0)))
+            if not self._has_t0:
+                print(f'[InputReader] no charge-light matched t0 in {calib_hits_path}, hits_t0 will not be filled')
 
             if self._is_sim:
                 self._backtracked_hits  = flow_manager[backtracked_hits_path]
