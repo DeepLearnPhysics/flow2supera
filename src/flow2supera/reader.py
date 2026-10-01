@@ -98,7 +98,7 @@ class InputReader:
                     
                     if 'HitsType' in cfg['Flow2Supera']:
                         self._hits_type=cfg['Flow2Supera'].get('HitsType')
-                        if self._hits_type != 'prompt' and self._hits_type != 'final' and self._hit_type != 'filtered':
+                        if self._hits_type != 'prompt' and self._hits_type != 'final' and self._hits_type != 'filtered':
                             raise ValueError('ERROR! HitsType config parameter can only be prompt or filtered or final (obselete)')
                     if 'DisabledChannels' in cfg['Flow2Supera']:
                         self._include_disabled_channels=cfg['Flow2Supera'].get('DisabledChannels', self._include_disabled_channels)
