@@ -108,7 +108,7 @@ class InputReader:
                     if 'RequireExtTrig' in cfg['Flow2Supera']:
                         self._require_ext_trigs=cfg['Flow2Supera'].get('RequireExtTrig')
         print(f'[InputReader] is sim? {self._is_sim} is mpvmpr? {self._is_mpvmpr}')
-        print(f'[InputReader] Type of calibrated hits used: {self._hits_type}')
+        print(f'[InputReader] Requested type of calibrated hits: {self._hits_type}')
 
     def __len__(self):
         if self._event_ids is None: return 0
@@ -119,24 +119,52 @@ class InputReader:
         for entry in range(len(self)):
             yield self.GetEvent(entry)
 
+    def ResolveHitsType(self, fin):
+        '''
+        Return the calibrated hits type to read from this file: the configured
+        one if present, otherwise filtered/final (final is the pre-rename name
+        of the filtered hits) and then prompt hits. For simulation, the
+        matching backtrack dataset must also be present.
+        '''
+        def available(hits_type):
+            if f'charge/calib_{hits_type}_hits/data' not in fin:
+                return False
+            return not self._is_sim or f'mc_truth/calib_{hits_type}_hit_backtrack/data' in fin
+
+        candidates = [self._hits_type]
+        if self._hits_type != 'prompt':
+            candidates += [t for t in ('filtered', 'final', 'prompt') if t != self._hits_type]
+        for hits_type in candidates:
+            if available(hits_type):
+                if hits_type != self._hits_type:
+                    print(f'[InputReader] WARNING: calib_{self._hits_type}_hits (or its backtrack) not in '
+                          f'the input file, falling back to calib_{hits_type}_hits')
+                return hits_type
+        raise ValueError(f'None of the calibrated hits datasets {candidates} are in the input file')
+
     def ReadFile(self, input_file, entries_to_read=None, verbose=False):
         if not isinstance(input_file, str):
             raise TypeError('Input file must be a str type')
 
         print('Reading input file...')
 
+        # Pick the calibrated hits available in this file (filtered -> final -> prompt)
+        with h5py.File(input_file, 'r') as fin:
+            self._file_hits_type = self.ResolveHitsType(fin)
+        print(f'[InputReader] Calibrated hits used for this file: {self._file_hits_type}')
+
         # H5Flow's H5FlowDataManager class associates datasets through references.
         # Dataset-level paths (without the /data suffix) are used to dereference
         # those associations directly with the flow manager.
         self.charge_event_path = 'charge/events'
-        self.calib_hits_path   = f'charge/calib_{self._hits_type}_hits'
+        self.calib_hits_path   = f'charge/calib_{self._file_hits_type}_hits'
         self.ext_trigs_path    = 'charge/ext_trigs'
         self.light_event_path  = 'light/events'
         self.light_flash_path  = 'light/flash'
 
         events_path            = 'charge/events/'
-        calib_hits_path        = f'charge/calib_{self._hits_type}_hits/data'
-        backtracked_hits_path  = f'mc_truth/calib_{self._hits_type}_hit_backtrack/data'
+        calib_hits_path        = f'charge/calib_{self._file_hits_type}_hits/data'
+        backtracked_hits_path  = f'mc_truth/calib_{self._file_hits_type}_hit_backtrack/data'
         interactions_path      = 'mc_truth/interactions/data'
         segments_path          = 'mc_truth/segments/data'
         trajectories_path      = 'mc_truth/trajectories/data'
